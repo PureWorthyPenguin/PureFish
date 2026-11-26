@@ -171,6 +171,7 @@ function ns.BuildDefaultSettings()
 		autoLootFishing           = true,   -- Default ON: event-based fishing auto-loot (never edits CVar)
 		hideFishingCastBar        = false,  -- Default OFF: hide player cast bar while fishing
 		hideNonHostileNameplates  = true,   -- Default ON: crash-safe nameplate/name hide while fishing
+		hideFriendlyPlayerNames   = false,  -- Default OFF: also hide friendly player & pet overhead names
 
 		-- Sound Boost While Fishing
 		soundBoostEnabled         = false,  -- Default OFF

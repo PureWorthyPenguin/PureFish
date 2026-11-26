@@ -269,14 +269,20 @@ local function ApplyNameplateHide(db)
 	tokens.nameplates = tokens.nameplates + 1
 
 	-- Hide friendly nameplates & non-hostile NPC names via CVars, while leaving
-	-- nameplateShowEnemies untouched so red hostile nameplates remain fully visible.
+	-- nameplateShowEnemies and UnitNameHostleNPC untouched so user hostile settings are respected.
 	ApplyCVar("nameplates", "nameplateShowFriends", "0")
 	ApplyCVar("nameplates", "nameplateShowFriendlyPlayers", "0")
 	ApplyCVar("nameplates", "UnitNameNPC", "0")
 	ApplyCVar("nameplates", "UnitNameNonCombatCreatureName", "0")
 	ApplyCVar("nameplates", "UnitNameInteractiveNPC", "0")
 	ApplyCVar("nameplates", "UnitNameFriendlySpecialNPCName", "0")
-	ApplyCVar("nameplates", "UnitNameHostleNPC", "1")
+
+	if db.hideFriendlyPlayerNames then
+		ApplyCVar("nameplates", "UnitNameFriendlyPlayerName", "0")
+		ApplyCVar("nameplates", "UnitNameFriendlyPetName", "0")
+		ApplyCVar("nameplates", "UnitNameFriendlyGuardianName", "0")
+		ApplyCVar("nameplates", "UnitNameFriendlyTotemName", "0")
+	end
 
 	-- Fade yellow neutral nameplates (reaction >= 4) using combat-safe SetAlpha(0)
 	nameplateFadeActive = true
@@ -345,6 +351,7 @@ function ns.OnCVarSettingsChanged()
 		RestoreGroup("nameplates")
 		RestoreFadedPlates()
 	elseif ns.IsChannelingFishing() then
+		RestoreGroup("nameplates")
 		ApplyNameplateHide(db)
 	end
 

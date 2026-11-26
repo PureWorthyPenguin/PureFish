@@ -240,43 +240,21 @@ function ns.InitPill()
 	end
 
 	local f = CreateFrame("Frame", "PureFishPill", UIParent, "BackdropTemplate")
-	f:SetSize(252, 36)
+	f:SetSize(242, 34)
 	f:SetFrameStrata("MEDIUM")
 	f:SetClampedToScreen(true)
 	f:EnableMouse(true)
 	f:SetMovable(true)
 	f:RegisterForDrag("LeftButton")
-
-	-- True 9-slice Blizzard frame (never stretches corners) tinted to match Action Bar / Cast Bar metallic bronze
-	local hasHudAtlas = C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo("UI-HUD-ActionBar-IconFrame") ~= nil
-	local usedNineSlice = false
-	if _G.NineSliceUtil and _G.NineSliceUtil.ApplyLayoutByName then
-		local nsFrame = CreateFrame("Frame", nil, f, "NineSlicePanelTemplate")
-		nsFrame:SetAllPoints(f)
-		nsFrame:SetFrameLevel(f:GetFrameLevel())
-		if pcall(_G.NineSliceUtil.ApplyLayoutByName, nsFrame, "TooltipDefaultLayout") then
-			if nsFrame.Center then
-				nsFrame.Center:SetVertexColor(0.05, 0.05, 0.07, 0.86)
-			end
-			if _G.NineSliceUtil.SetBorderColor then
-				_G.NineSliceUtil.SetBorderColor(nsFrame, 0.78, 0.70, 0.54, 1.0)
-			end
-			usedNineSlice = true
-		else
-			nsFrame:Hide()
-		end
-	end
-	if not usedNineSlice then
-		f:SetBackdrop({
-			bgFile = "Interface\\Buttons\\WHITE8x8",
-			edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-			tile = false,
-			edgeSize = 14,
-			insets = { left = 3, right = 3, top = 3, bottom = 3 },
-		})
-		f:SetBackdropColor(0.05, 0.05, 0.07, 0.86)
-		f:SetBackdropBorderColor(0.78, 0.70, 0.54, 0.95)
-	end
+	f:SetBackdrop({
+		bgFile = "Interface\\Buttons\\WHITE8x8",
+		edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+		tile = false,
+		edgeSize = 12,
+		insets = { left = 3, right = 3, top = 3, bottom = 3 },
+	})
+	f:SetBackdropColor(0.06, 0.07, 0.09, 0.65)
+	f:SetBackdropBorderColor(0.55, 0.48, 0.30, 0.85)
 
 	f:SetScript("OnDragStart", function(self)
 		local db = ns.GetDB and ns.GetDB()
@@ -341,39 +319,34 @@ function ns.InitPill()
 		GameTooltip:Hide()
 	end)
 
-	-- Helper to frame square icon buttons with Blizzard's native Action Bar slot border
-	local function StyleHudIconButton(btn, iconTex)
+	-- Rounded minimalistic border matching the pill's exact UI-Tooltip-Border style
+	local function StyleMinimalIconButton(btn, iconTex)
 		iconTex:ClearAllPoints()
 		iconTex:SetPoint("TOPLEFT", btn, "TOPLEFT", 2, -2)
 		iconTex:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -2, 2)
 		iconTex:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-		if hasHudAtlas then
-			local slotBorder = btn:CreateTexture(nil, "OVERLAY")
-			slotBorder:SetAllPoints(btn)
-			slotBorder:SetAtlas("UI-HUD-ActionBar-IconFrame", false)
-			local hl = btn:CreateTexture(nil, "HIGHLIGHT")
-			hl:SetAllPoints(btn)
-			if C_Texture.GetAtlasInfo("UI-HUD-ActionBar-IconFrame-Mouseover") then
-				hl:SetAtlas("UI-HUD-ActionBar-IconFrame-Mouseover", false)
-			else
-				hl:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
-				hl:SetBlendMode("ADD")
-			end
-		end
+		local b = CreateFrame("Frame", nil, btn, "BackdropTemplate")
+		b:SetPoint("TOPLEFT", btn, "TOPLEFT", -1, 1)
+		b:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 1, -1)
+		b:SetBackdrop({
+			edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+			edgeSize = 10,
+		})
+		b:SetBackdropBorderColor(0.55, 0.48, 0.30, 0.85)
 	end
 
 	-- 1. Clickable Lure Button (SecureActionButtonTemplate)
 	lureBtn = CreateFrame("Button", "PureFishPillLureButton", f, "SecureActionButtonTemplate")
-	lureBtn:SetSize(24, 24)
+	lureBtn:SetSize(22, 22)
 	lureBtn:SetPoint("LEFT", f, "LEFT", 7, 0)
 	lureBtn:RegisterForClicks("AnyUp", "AnyDown")
 
 	lureIcon = lureBtn:CreateTexture(nil, "ARTWORK")
-	StyleHudIconButton(lureBtn, lureIcon)
+	StyleMinimalIconButton(lureBtn, lureIcon)
 
-	lureGlow = lureBtn:CreateTexture(nil, "OVERLAY", nil, 2)
-	lureGlow:SetPoint("TOPLEFT", lureBtn, "TOPLEFT", -3, 3)
-	lureGlow:SetPoint("BOTTOMRIGHT", lureBtn, "BOTTOMRIGHT", 3, -3)
+	lureGlow = lureBtn:CreateTexture(nil, "OVERLAY")
+	lureGlow:SetPoint("TOPLEFT", lureBtn, "TOPLEFT", -2, 2)
+	lureGlow:SetPoint("BOTTOMRIGHT", lureBtn, "BOTTOMRIGHT", 2, -2)
 	lureGlow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
 	lureGlow:SetBlendMode("ADD")
 	lureGlow:SetVertexColor(1.0, 0.82, 0.2, 0.9)
@@ -412,15 +385,13 @@ function ns.InitPill()
 
 	-- 2. Weapon Swap Button (right side)
 	swapBtn = CreateFrame("Button", nil, f)
-	swapBtn:SetSize(24, 24)
+	swapBtn:SetSize(22, 22)
 	swapBtn:SetPoint("RIGHT", f, "RIGHT", -7, 0)
-	if not hasHudAtlas then
-		swapBtn:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
-	end
+	swapBtn:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
 
 	swapIcon = swapBtn:CreateTexture(nil, "ARTWORK")
 	swapIcon:SetTexture(ns.GetSavedWeaponIcon and ns.GetSavedWeaponIcon() or "Interface\\Icons\\INV_Sword_04")
-	StyleHudIconButton(swapBtn, swapIcon)
+	StyleMinimalIconButton(swapBtn, swapIcon)
 
 	swapBtn:SetScript("OnClick", function()
 		ns.ToggleFishingPole()

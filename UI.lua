@@ -520,9 +520,14 @@ end
 		function(v) ns.GetDB().hideFishingCastBar = v end))
 
 	Add(MakeCheckbox(content, "Hide Non-Hostile Nameplates & Names While Fishing",
-		"Temporarily hides friendly player nameplates and non-hostile NPC names while fishing (keeping hostile NPC names visible). Crash-safe with a 5s grace timer.",
+		"Temporarily hides friendly and neutral nameplates (works with Blizzard plates and Platynator) plus non-hostile NPC names while fishing. Hostile mobs, enemy players, and the bobber gear icon remain untouched. Crash-safe with instant restore on weapon swap or combat (and a 5s grace timer between casts).",
 		function() return ns.GetDB().hideNonHostileNameplates end,
 		function(v) ns.GetDB().hideNonHostileNameplates = v end))
+
+	local friendlyNamesCB = Add(MakeCheckbox(content, "Also hide friendly player & pet names",
+		"Also hides friendly players' overhead names, pets, guardians, and totems while fishing - ideal for crowded fishing spots. Restored automatically when fishing ends.",
+		function() return ns.GetDB().hideFriendlyPlayerNames end,
+		function(v) ns.GetDB().hideFriendlyPlayerNames = v end), 26, 22)
 
 	------------------------------------------------------------------------
 	-- Section 5: Minimal Fishing Pill
@@ -610,6 +615,10 @@ end
 		bgSoundCB:SetEnabled(snd)
 		if muteMusicCB.label then muteMusicCB.label:SetTextColor(snd and 1 or 0.5, snd and 1 or 0.5, snd and 1 or 0.5) end
 		if bgSoundCB.label then bgSoundCB.label:SetTextColor(snd and 1 or 0.5, snd and 1 or 0.5, snd and 1 or 0.5) end
+
+		local npActive = db.hideNonHostileNameplates and true or false
+		friendlyNamesCB:SetEnabled(npActive)
+		if friendlyNamesCB.label then friendlyNamesCB.label:SetTextColor(npActive and 1 or 0.5, npActive and 1 or 0.5, npActive and 1 or 0.5) end
 
 		savedGearFS:SetText("Saved Combat Weapons: |cffffd100" .. (ns.GetSavedGearSummary and ns.GetSavedGearSummary() or "None") .. "|r")
 	end

@@ -19,7 +19,8 @@ PureFish streamlines fishing with one-key casting and reeling, camera-safe doubl
 - **Crash-Safe CVar Vault:**
   - Temporarily boosted **Sound** (off by default, raise-only Master & SFX sliders, optional Mute Music/Ambience & Background Sound), **Soft-Target**, and **Click-to-Move** CVars are snapshotted in `PureFishDB` and restored automatically on weapon swap, combat, logout, or `/reload` after a crash.
 - **Hide Non-Hostile Nameplates & Names While Fishing (default ON):**
-  - Hides neutral/friendly nameplates (compatible with default Blizzard nameplates and custom nameplate addons like Platynator, zero mouseover flicker) and non-hostile overhead names while keeping **hostile red nameplates** and the **bobber gear icon** fully visible.
+  - Hides neutral/friendly nameplates (compatible with default Blizzard nameplates and custom nameplate addons like Platynator, zero mouseover flicker) and non-hostile NPC overhead names while leaving **hostile red nameplates**, **enemy players**, and the **bobber gear icon** untouched.
+  - Includes an optional **Also hide friendly player & pet names** sub-setting for crowded fishing spots.
 - **Crash-Proof Fishing Auto-Loot (default ON):**
   - Event-based fishing auto-loot that never touches WoW's built-in Auto Loot setting.
 - **Best-Lure Helper & Minimal Pole-Only Fishing Pill (default ON):**

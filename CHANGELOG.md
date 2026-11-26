@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.0.1
+
+- Added optional **Also hide friendly player & pet names** sub-setting under **Hide Non-Hostile Nameplates & Names While Fishing** (clears crowded fishing spots of friendly player, pet, guardian, and totem overhead names; crash-safe).
+- Stopped forcing `UnitNameHostleNPC = 1` so hostile name/nameplate settings always respect the player's own defaults.
+- Updated Settings tooltips to accurately describe nameplate & overhead name hiding behavior.
+- Refined the Minimal Fishing Pill with a sleeker translucent backdrop (`0.65` alpha), symmetrical `22x22` Lure & Weapon Swap buttons, and matching rounded borders.
+
 ## v1.0.0
 
 - Initial release of PureFish for World of Warcraft Forever.
