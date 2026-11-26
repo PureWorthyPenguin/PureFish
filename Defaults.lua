@@ -2,7 +2,8 @@
 local _, ns = ...
 
 ns.ADDON_ICON = "Interface\\Icons\\Trade_Fishing"
-ns.DEFAULT_MINIMAP_ANGLE = 220
+-- Default orbiting angle on Minimap rim (192° sits cleanly between PureFade's 164° and PureGrid's 220°)
+ns.DEFAULT_MINIMAP_ANGLE = 192
 
 -- Global keybinding header & labels for Bindings.xml
 BINDING_HEADER_PUREFISH = "PureFish"

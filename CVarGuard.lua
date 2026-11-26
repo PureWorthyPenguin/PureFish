@@ -3,8 +3,8 @@
 -- and restored after a grace timer, on logout, or on next login if interrupted by /reload or crash.
 local _, ns = ...
 
-local SOUND_GRACE_SECONDS = 5
-local NAMEPLATE_GRACE_SECONDS = 5
+local SOUND_GRACE_SECONDS = 10
+local NAMEPLATE_GRACE_SECONDS = 10
 local SOFTTARGET_GRACE_SECONDS = 10
 local RestoreFadedPlates
 
@@ -48,12 +48,22 @@ local function ApplyCVar(group, cvar, value)
 	local held = vault[group]
 	local targetStr = tostring(value)
 
-	if not held[cvar] then
-		local ok, orig = pcall(GetCVar, cvar)
-		if not ok or orig == nil then
-			return
+	local ok, current = pcall(GetCVar, cvar)
+	if not ok or current == nil then
+		return
+	end
+
+	-- Skip redundant SetCVar calls when already at the desired value
+	-- (avoids triggering C++ nameplate/audio resets on every cast)
+	if ValuesMatch(current, targetStr) then
+		if held[cvar] then
+			held[cvar].to = targetStr
 		end
-		held[cvar] = { from = tostring(orig), to = targetStr }
+		return
+	end
+
+	if not held[cvar] then
+		held[cvar] = { from = tostring(current), to = targetStr }
 	else
 		held[cvar].to = targetStr
 	end
@@ -123,7 +133,7 @@ local function ApplySoftTarget(db)
 	tokens.softTarget = tokens.softTarget + 1
 	ApplyCVar("softTarget", "SoftTargetInteract", "3")
 	ApplyCVar("softTarget", "SoftTargetInteractArc", "2")
-	ApplyCVar("softTarget", "SoftTargetInteractRange", "60")
+	ApplyCVar("softTarget", "SoftTargetInteractRange", "30")
 	local iconVal = (db.showBobberIcon ~= false) and "1" or "0"
 	ApplyCVar("softTarget", "SoftTargetIconGameObject", iconVal)
 	ApplyCVar("softTarget", "SoftTargetIconInteract", iconVal)
@@ -268,10 +278,9 @@ local function ApplyNameplateHide(db)
 	end
 	tokens.nameplates = tokens.nameplates + 1
 
-	-- Hide friendly nameplates & non-hostile NPC names via CVars, while leaving
-	-- nameplateShowEnemies and UnitNameHostleNPC untouched so user hostile settings are respected.
-	ApplyCVar("nameplates", "nameplateShowFriends", "0")
-	ApplyCVar("nameplates", "nameplateShowFriendlyPlayers", "0")
+	-- Hide non-hostile overhead names via UnitName* CVars only (never touch nameplateShow*
+	-- CVars, which would reset WoW's stacking nameplate layout; non-hostile nameplates are
+	-- hidden cleanly via combat-safe SetAlpha(0) below).
 	ApplyCVar("nameplates", "UnitNameNPC", "0")
 	ApplyCVar("nameplates", "UnitNameNonCombatCreatureName", "0")
 	ApplyCVar("nameplates", "UnitNameInteractiveNPC", "0")

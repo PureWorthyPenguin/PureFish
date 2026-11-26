@@ -478,7 +478,7 @@ end
 	AddHeader("Sound Boost While Fishing (Crash-Safe)")
 
 	Add(MakeCheckbox(content, "Boost Sound While Fishing",
-		"Temporarily raises Master and Sound Effects volumes while fishing so the bobber splash stands out. Original volumes are saved to PureFishDB and restored after a 5s grace timer, on logout, or on reload after a crash.",
+		"Temporarily raises Master and Sound Effects volumes while fishing so the bobber splash stands out. Original volumes are saved to PureFishDB and restored after a 10s grace timer, on weapon swap, logout, or reload after a crash.",
 		function() return ns.GetDB().soundBoostEnabled end,
 		function(v) ns.GetDB().soundBoostEnabled = v end))
 
@@ -520,7 +520,7 @@ end
 		function(v) ns.GetDB().hideFishingCastBar = v end))
 
 	Add(MakeCheckbox(content, "Hide Non-Hostile Nameplates & Names While Fishing",
-		"Temporarily hides friendly and neutral nameplates (works with Blizzard plates and Platynator) plus non-hostile NPC names while fishing. Hostile mobs, enemy players, and the bobber gear icon remain untouched. Crash-safe with instant restore on weapon swap or combat (and a 5s grace timer between casts).",
+		"Temporarily hides friendly and neutral nameplates (works with Blizzard plates and Platynator) plus non-hostile NPC names while fishing. Hostile mobs, enemy players, and the bobber gear icon remain untouched. Crash-safe with instant restore on weapon swap or combat (and a 10s grace timer between casts).",
 		function() return ns.GetDB().hideNonHostileNameplates end,
 		function(v) ns.GetDB().hideNonHostileNameplates = v end))
 

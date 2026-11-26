@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.0.2
+
+- Updated default Minimap button angle to `192°` so PureFade (`164°`), PureFish (`192°`), and PureGrid (`220°`) sit cleanly in alphabetical order with zero overlap.
+- Stopped modifying `nameplateShowFriends` / `nameplateShowFriendlyPlayers` CVars and skipped redundant `SetCVar` writes when already at target values, eliminating stacking enemy nameplate resets between recasts.
+- Standardized between-cast CVar grace timers to `10s` across Sound, Nameplates, and Soft-Target (still restoring instantly on weapon swap or combat).
+- Tightened `SoftTargetInteractRange` from `60` to `30` yards (keeping `Arc = 2`) so panning the camera doesn't grab distant NPCs while still allowing wide-angle bobber reeling.
+
 ## v1.0.1
 
 - Added optional **Also hide friendly player & pet names** sub-setting under **Hide Non-Hostile Nameplates & Names While Fishing** (clears crowded fishing spots of friendly player, pet, guardian, and totem overhead names; crash-safe).
