@@ -1,0 +1,13 @@
+<Bindings>
+	<Binding name="PUREFISH_CAST" header="PUREFISH" category="ADDONS">
+		if PureFish_CastOrReel then
+			PureFish_CastOrReel()
+		end
+	</Binding>
+	<Binding name="PUREFISH_POLE" category="ADDONS">
+		if PureFish_TogglePole then
+			PureFish_TogglePole()
+		end
+	</Binding>
+	<Binding name="CLICK PureFishLureButton:LeftButton" category="ADDONS" />
+</Bindings>
