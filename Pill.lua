@@ -15,7 +15,66 @@ local updateTicker
 -- Session catch tracking
 local sessionTotal = 0
 local sessionItems = {} -- [itemName] = { count = n, icon = texture }
+local sessionStartTime = nil
+local sessionStartSkill = nil
+local sessionGetaways = 0
+local sessionVendorCopper = 0
+local sessionAHCopper = 0
 local lastLootWindowAt = 0
+
+local function FormatCoins(copper)
+	copper = math.floor(copper or 0)
+	if copper <= 0 then
+		return "0c"
+	end
+	local coinFn = (C_CurrencyInfo and C_CurrencyInfo.GetCoinTextureString) or GetCoinTextureString
+	if coinFn then
+		local ok, str = pcall(coinFn, copper)
+		if ok and type(str) == "string" and str ~= "" then
+			return str
+		end
+	end
+	local g = math.floor(copper / 10000)
+	local s = math.floor((copper % 10000) / 100)
+	local c = copper % 100
+	if g > 0 then
+		return string.format("|cffffd100%dg|r |cffc7c7cf%ds|r |cffeda55f%dc|r", g, s, c)
+	elseif s > 0 then
+		return string.format("|cffc7c7cf%ds|r |cffeda55f%dc|r", s, c)
+	end
+	return string.format("|cffeda55f%dc|r", c)
+end
+
+local function GetAuctionatorPrice(itemLink)
+	if not itemLink or not (_G.Auctionator and _G.Auctionator.API and _G.Auctionator.API.v1) then
+		return 0
+	end
+	local api = _G.Auctionator.API.v1
+	if api.GetAuctionPriceByItemLink then
+		local ok, price = pcall(api.GetAuctionPriceByItemLink, "PureFish", itemLink)
+		local n = ok and ns.SafeNumber(price)
+		if n and n > 0 then
+			return n
+		end
+	end
+	return 0
+end
+
+-- Lure expiring & getaway nudge state
+local lureAlertArmed = false
+local lastNudgeChatAt = -math.huge
+
+local function EnsureSessionStarted()
+	if not sessionStartTime then
+		sessionStartTime = GetTime()
+	end
+	if not sessionStartSkill and ns.GetFishingSkillInfo then
+		local rank = ns.GetFishingSkillInfo()
+		if rank then
+			sessionStartSkill = rank
+		end
+	end
+end
 
 function ns.RecordFishingLoot(numLoot)
 	local now = GetTime()
@@ -24,6 +83,7 @@ function ns.RecordFishingLoot(numLoot)
 		return
 	end
 	lastLootWindowAt = now
+	EnsureSessionStarted()
 
 	local addedAny = false
 	for slot = 1, numLoot do
@@ -39,6 +99,24 @@ function ns.RecordFishingLoot(numLoot)
 					sessionItems[safeName] = entry
 				end
 				entry.count = entry.count + safeQty
+				if GetLootSlotLink then
+					local lOk, link = pcall(GetLootSlotLink, slot)
+					local safeLink = lOk and ns.SafeString(link)
+					if safeLink then
+						local infoFn = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+						if infoFn then
+							local iOk, _, _, _, _, _, _, _, _, _, _, sellPrice = pcall(infoFn, safeLink)
+							local copper = iOk and ns.SafeNumber(sellPrice) or 0
+							if copper > 0 then
+								sessionVendorCopper = sessionVendorCopper + (copper * safeQty)
+							end
+						end
+						local ahPrice = GetAuctionatorPrice(safeLink)
+						if ahPrice > 0 then
+							sessionAHCopper = sessionAHCopper + (ahPrice * safeQty)
+						end
+					end
+				end
 				addedAny = true
 			end
 		end
@@ -49,17 +127,61 @@ function ns.RecordFishingLoot(numLoot)
 	end
 end
 
+function ns.RecordFishingGetaway()
+	EnsureSessionStarted()
+	sessionGetaways = sessionGetaways + 1
+	if ns.UpdatePill then
+		ns.UpdatePill()
+	end
+end
+
+function ns.NudgeLureIfMissing(reason)
+	local lure = ns.GetLureStatus and ns.GetLureStatus()
+	if not lure or lure.hasEnchant or not lure.bestLure then
+		return
+	end
+	if lureGlow then
+		lureGlow:Show()
+		lureGlow:SetAlpha(1)
+	end
+	local now = GetTime()
+	if (now - lastNudgeChatAt) >= 60 then
+		lastNudgeChatAt = now
+		print("|cff66ccffPureFish:|r " .. (reason or "No lure active")
+			.. " - click the Lure icon on the pill (or press your lure keybind) to apply |cffffd100"
+			.. lure.bestLure.name .. "|r (+" .. tostring(lure.bestLure.bonus) .. ").")
+	end
+end
+
 function ns.GetSessionStats()
 	return sessionTotal, sessionItems
 end
 
 function ns.ResetSessionStats()
 	sessionTotal = 0
+	sessionStartTime = nil
+	sessionStartSkill = nil
+	sessionGetaways = 0
+	sessionVendorCopper = 0
+	sessionAHCopper = 0
 	wipe(sessionItems)
 	if ns.UpdatePill then
 		ns.UpdatePill()
 	end
 	print("|cff66ccffPureFish:|r Fishing session counter reset.")
+end
+
+local function FormatDuration(sec)
+	sec = math.max(0, math.floor(sec))
+	if sec < 60 then
+		return sec .. "s"
+	end
+	local m = math.floor(sec / 60)
+	local h = math.floor(m / 60)
+	if h > 0 then
+		return string.format("%dh %dm", h, m % 60)
+	end
+	return string.format("%dm", m)
 end
 
 local function FormatTimeShort(sec)
@@ -138,32 +260,55 @@ function ns.ResetPillPosition()
 	print("|cff66ccffPureFish:|r Fishing pill position reset to default.")
 end
 
+function ns.ApplyPillStyle()
+	if not pillFrame then
+		return
+	end
+	local db = ns.GetDB and ns.GetDB()
+	local scale = (db and tonumber(db.pillScale)) or 1.0
+	if scale < 0.75 then scale = 0.75 elseif scale > 1.50 then scale = 1.50 end
+	local alpha = (db and tonumber(db.pillAlpha))
+	if alpha == nil then alpha = 0.65 end
+	if alpha < 0 then alpha = 0 elseif alpha > 1 then alpha = 1 end
+	pillFrame:SetScale(scale)
+	pillFrame:SetBackdropColor(0.06, 0.07, 0.09, alpha)
+end
+
 local function UpdatePillContents()
 	if not pillFrame then
 		return
 	end
 
-	-- Lure button
+	local db = ns.GetDB and ns.GetDB()
+
+	-- Lure button + expiring chime
 	local lure = ns.GetLureStatus()
 	if lure.hasEnchant and lure.timeLeftSec > 0 then
 		lureIcon:SetTexture((lure.bestLure and lure.bestLure.icon) or "Interface\\Icons\\INV_Misc_Orb_03")
 		lureIcon:SetDesaturated(false)
 		lureTimerFS:SetText(FormatTimeShort(lure.timeLeftSec))
-		if lure.timeLeftSec <= 30 then
-			lureTimerFS:SetTextColor(1.0, 0.45, 0.25)
-			lureGlow:Show()
-		else
+		if lure.timeLeftSec > 30 then
+			lureAlertArmed = true
 			lureTimerFS:SetTextColor(0.35, 1.0, 0.35)
 			lureGlow:Hide()
+		else
+			lureTimerFS:SetTextColor(1.0, 0.45, 0.25)
+			lureGlow:Show()
+			if lureAlertArmed and db and db.lureExpiringAlert then
+				lureAlertArmed = false
+				pcall(PlaySound, (SOUNDKIT and SOUNDKIT.UI_BNET_TOAST) or 18019, "Master")
+			end
 		end
 		lureCountFS:SetText("")
 	elseif lure.bestLure then
+		lureAlertArmed = false
 		lureIcon:SetTexture(lure.bestLure.icon)
 		lureIcon:SetDesaturated(false)
 		lureTimerFS:SetText("")
-		lureCountFS:SetText(tostring(lure.bestLure.count))
+		lureCountFS:SetText(lure.bestLure.isHat and "" or tostring(lure.bestLure.count))
 		lureGlow:Show()
 	else
+		lureAlertArmed = false
 		lureIcon:SetTexture("Interface\\Icons\\INV_Misc_Orb_03")
 		lureIcon:SetDesaturated(true)
 		lureTimerFS:SetText("")
@@ -190,11 +335,16 @@ local function UpdatePillContents()
 	end
 end
 
+local PopulateSessionTooltip
+
 local function StartTicker()
 	if not updateTicker then
 		updateTicker = C_Timer.NewTicker(1.0, function()
 			if pillFrame and pillFrame:IsShown() then
 				UpdatePillContents()
+				if PopulateSessionTooltip and GameTooltip:IsShown() and GameTooltip:GetOwner() == pillFrame then
+					PopulateSessionTooltip(pillFrame)
+				end
 			end
 		end)
 	end
@@ -286,10 +436,35 @@ function ns.InitPill()
 		end
 	end)
 
-	f:SetScript("OnEnter", function(self)
-		GameTooltip:SetOwner(self, GetPillTooltipAnchor())
+	PopulateSessionTooltip = function(owner)
+		GameTooltip:SetOwner(owner, GetPillTooltipAnchor())
 		GameTooltip:SetText("PureFish Session", 1, 0.82, 0)
+		if sessionStartTime then
+			local elapsed = math.max(1, GetTime() - sessionStartTime)
+			local rateStr = ""
+			if sessionTotal > 0 and elapsed >= 30 then
+				local perHour = math.floor((sessionTotal * 3600 / elapsed) + 0.5)
+				rateStr = string.format(" (%d/hr)", perHour)
+			end
+			GameTooltip:AddDoubleLine("Duration", FormatDuration(elapsed) .. rateStr, 0.8, 0.8, 0.8, 1, 1, 1)
+		end
+		if sessionStartSkill and ns.GetFishingSkillInfo then
+			local curRank = ns.GetFishingSkillInfo()
+			if curRank and curRank > sessionStartSkill then
+				GameTooltip:AddDoubleLine("Skill Gained", "+" .. tostring(curRank - sessionStartSkill), 0.8, 0.8, 0.8, 0.35, 1.0, 0.35)
+			end
+		end
+		if sessionGetaways > 0 then
+			GameTooltip:AddDoubleLine("Escaped", tostring(sessionGetaways), 0.8, 0.8, 0.8, 1.0, 0.55, 0.35)
+		end
+		if sessionVendorCopper > 0 then
+			GameTooltip:AddDoubleLine("Vendor Value", FormatCoins(sessionVendorCopper), 0.8, 0.8, 0.8, 1, 1, 1)
+		end
+		if sessionAHCopper > 0 then
+			GameTooltip:AddDoubleLine("Auctionator Value", FormatCoins(sessionAHCopper), 0.8, 0.8, 0.8, 1, 1, 1)
+		end
 		if sessionTotal > 0 then
+			GameTooltip:AddLine(" ", 1, 1, 1)
 			local list = {}
 			for name, entry in pairs(sessionItems) do
 				list[#list + 1] = { name = name, count = entry.count }
@@ -313,6 +488,10 @@ function ns.InitPill()
 		end
 		GameTooltip:AddLine("Right-Click: Reset Session Counter", 0.8, 0.8, 0.8)
 		GameTooltip:Show()
+	end
+
+	f:SetScript("OnEnter", function(self)
+		PopulateSessionTooltip(self)
 	end)
 
 	f:SetScript("OnLeave", function()
@@ -415,6 +594,7 @@ function ns.InitPill()
 	statusFS:SetWordWrap(false)
 
 	pillFrame = f
+	ns.ApplyPillStyle()
 	PositionPill()
 	ns.UpdatePill()
 end

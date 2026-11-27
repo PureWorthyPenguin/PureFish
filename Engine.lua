@@ -372,6 +372,12 @@ function ns.OnPoleStateChanged(equipped)
 			ns.RestoreAllCVars()
 		end
 	end
+	if ns.UpdateFindFishTracking then
+		ns.UpdateFindFishTracking(equipped)
+	end
+	if ns.UpdateCastButtonAction then
+		ns.UpdateCastButtonAction()
+	end
 	UpdateWatchLoopState()
 end
 
@@ -385,13 +391,15 @@ function ns.CastOrReelFromKeybind()
 	if not CanFishNow(false) then
 		return
 	end
+	if ns.UpdateCastButtonAction then
+		ns.UpdateCastButtonAction()
+	end
 	local k1, k2 = GetBindingKey("PUREFISH_CAST")
-	local spellName = ns.GetFishingSpellName()
 	if k1 then
-		SetOverrideBindingSpell(doubleClickOwner, true, k1, spellName)
+		SetOverrideBindingClick(doubleClickOwner, true, k1, castButton:GetName())
 	end
 	if k2 then
-		SetOverrideBindingSpell(doubleClickOwner, true, k2, spellName)
+		SetOverrideBindingClick(doubleClickOwner, true, k2, castButton:GetName())
 	end
 	C_Timer.After(0.15, function()
 		if not InCombatLockdown() and not doubleClickInteractActive then
@@ -447,10 +455,32 @@ end
 --------------------------------------------------------------------------------
 -- Initialization & Event Dispatcher
 --------------------------------------------------------------------------------
+function ns.UpdateCastButtonAction()
+	if not castButton or InCombatLockdown() then
+		return
+	end
+	local db = ns.GetDB and ns.GetDB()
+	local lureMacro = ns.GetBestLureMacroText and ns.GetBestLureMacroText()
+	local lureStatus = ns.GetLureStatus and ns.GetLureStatus()
+	local wantLure = db and db.castAppliesMissingLure
+		and ns.IsPoleEquipped and ns.IsPoleEquipped()
+		and lureStatus and not lureStatus.hasEnchant
+		and lureMacro ~= nil
+	if wantLure then
+		castButton:SetAttribute("type", "macro")
+		castButton:SetAttribute("macrotext", lureMacro)
+		castButton:SetAttribute("spell", nil)
+	else
+		castButton:SetAttribute("type", "spell")
+		castButton:SetAttribute("spell", ns.GetFishingSpellName())
+		castButton:SetAttribute("macrotext", nil)
+	end
+end
+
 local function UpdateSecureButtonKeyDown()
 	if castButton and not InCombatLockdown() then
 		castButton:SetAttribute("useKeyDowns", GetCVarBool("ActionButtonUseKeyDown"))
-		castButton:SetAttribute("spell", ns.GetFishingSpellName())
+		ns.UpdateCastButtonAction()
 	end
 end
 
@@ -463,7 +493,11 @@ function ns.InitEngine()
 		btn:SetScript("PreClick", function(self)
 			if not InCombatLockdown() then
 				local both = IsMouseButtonDown("LeftButton") or (GetTime() - leftDownAt < BOTH_BUTTONS_WINDOW)
-				self:SetAttribute("type", both and nil or "spell")
+				if both then
+					self:SetAttribute("type", nil)
+				else
+					ns.UpdateCastButtonAction()
+				end
 			end
 		end)
 		btn:SetScript("PostClick", function(self, _, down)
@@ -506,6 +540,7 @@ function ns.OnEngineSettingsChanged()
 	end
 	ns.RefreshCastBarVisibility()
 	if not InCombatLockdown() then
+		ns.UpdateCastButtonAction()
 		ns.EvaluateWatchBindings()
 	end
 	UpdateWatchLoopState()
@@ -539,6 +574,37 @@ GameTooltip:HookScript("OnShow", function(self)
 	end
 end)
 
+local lastGetawayAt = 0
+
+local function HandleFishingFeedbackText(msg, isErrorEvent)
+	if not msg then
+		return
+	end
+	local lower = msg:lower()
+	local now = GetTime()
+	if lower:find("fish got away", 1, true) then
+		if (now - lastGetawayAt) >= 0.5 then
+			lastGetawayAt = now
+			if ns.RecordFishingGetaway then
+				ns.RecordFishingGetaway()
+			end
+			if ns.NudgeLureIfMissing then
+				ns.NudgeLureIfMissing("Fish got away")
+			end
+		end
+	elseif lower:find("skill", 1, true) and lower:find("high enough", 1, true) then
+		if ns.NudgeLureIfMissing then
+			ns.NudgeLureIfMissing("Skill too low for this water")
+		end
+	end
+	if isErrorEvent then
+		local justCast = (chanStartAt and (now - chanStartAt < 1.5)) or (shortEndAt and (now - shortEndAt < 1.0))
+		if justCast or lower:find("fishable water", 1, true) then
+			missCastAt = now
+		end
+	end
+end
+
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
 eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -549,9 +615,13 @@ eventFrame:RegisterEvent("GLOBAL_MOUSE_UP")
 eventFrame:RegisterEvent("LOOT_READY")
 eventFrame:RegisterEvent("CVAR_UPDATE")
 eventFrame:RegisterEvent("UI_ERROR_MESSAGE")
+eventFrame:RegisterEvent("UI_INFO_MESSAGE")
+eventFrame:RegisterEvent("CHAT_MSG_SYSTEM")
 eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_START", "player")
 eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_STOP", "player")
 eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_FAILED", "player")
+eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
+eventFrame:RegisterUnitEvent("UNIT_INVENTORY_CHANGED", "player")
 
 eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
 	if event == "PLAYER_REGEN_DISABLED" then
@@ -603,14 +673,19 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
 		if ns.IsFishingSpell(arg3) then
 			missCastAt = GetTime()
 		end
-	elseif event == "UI_ERROR_MESSAGE" then
+	elseif event == "UNIT_SPELLCAST_SUCCEEDED" or event == "UNIT_INVENTORY_CHANGED" then
+		if ns.IsPoleEquipped() then
+			ns.UpdateCastButtonAction()
+		end
+	elseif event == "UI_ERROR_MESSAGE" or event == "UI_INFO_MESSAGE" then
 		if ns.IsPoleEquipped() then
 			local msg = ns.SafeString(type(arg2) == "string" and arg2 or arg1)
-			local now = GetTime()
-			local justCast = (chanStartAt and (now - chanStartAt < 1.5)) or (shortEndAt and (now - shortEndAt < 1.0))
-			if msg and (justCast or msg:find("fishable water", 1, true)) then
-				missCastAt = now
-			end
+			HandleFishingFeedbackText(msg, event == "UI_ERROR_MESSAGE")
+		end
+	elseif event == "CHAT_MSG_SYSTEM" then
+		if ns.IsPoleEquipped() then
+			local msg = ns.SafeString(arg1)
+			HandleFishingFeedbackText(msg, false)
 		end
 	elseif event == "LOOT_READY" then
 		if IsFishingLoot and ns.SafeBool(IsFishingLoot()) then

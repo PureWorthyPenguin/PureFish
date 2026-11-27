@@ -136,58 +136,77 @@ function ns.IsChannelingFishing()
 	return safeName ~= nil and safeName == ns.GetFishingSpellName()
 end
 
+-- Find Fish minimap tracking spell ID
+ns.FIND_FISH_SPELL_ID = 43308
+
+-- On-use fishing hats (equipped in Head slot 1)
+ns.ON_USE_FISHING_HATS = {
+	[33820] = { bonus = 75, name = "Weather-Beaten Fishing Hat" },
+}
+
+-- Armor slots supported for optional Fishing Outfit swap (Head, Feet, Hands)
+ns.FISHING_ARMOR_SLOTS = { 1, 8, 10 }
+
 -- Priority-ordered fishing lures (highest skill bonus first)
 ns.LURE_LIST = {
-	{ id = 6533, bonus = 100, name = "Aquadynamic Fish Attractor" },
-	{ id = 7307, bonus = 75,  name = "Flesh Eating Worm" },
-	{ id = 6532, bonus = 75,  name = "Bright Baubles" },
-	{ id = 6530, bonus = 50,  name = "Nightcrawlers" },
-	{ id = 6811, bonus = 50,  name = "Aquadynamic Fish Lens" },
-	{ id = 6529, bonus = 25,  name = "Shiny Bauble" },
+	{ id = 34861, bonus = 100, name = "Sharpened Fish Hook" },
+	{ id = 46006, bonus = 100, name = "Glow Worm" },
+	{ id = 6533,  bonus = 100, name = "Aquadynamic Fish Attractor" },
+	{ id = 7307,  bonus = 75,  name = "Flesh Eating Worm" },
+	{ id = 6532,  bonus = 75,  name = "Bright Baubles" },
+	{ id = 6530,  bonus = 50,  name = "Nightcrawlers" },
+	{ id = 6811,  bonus = 50,  name = "Aquadynamic Fish Lens" },
+	{ id = 6529,  bonus = 25,  name = "Shiny Bauble" },
 }
 
 -- Default account-wide settings
 function ns.BuildDefaultSettings()
 	return {
 		-- Cast & Reel With (active only while a fishing pole is equipped)
-		castInteractKey           = true,   -- Default ON (e.g. F)
+		castInteractKey            = true,   -- Default ON (e.g. F)
 		castDoubleRightClick       = true,   -- Default ON (camera-safe)
 		doubleClickSpeed           = 0.25,   -- 0.10..0.60s window
 		doubleClickMounted         = false,  -- Allow double-click cast while mounted
 		recastOnDoubleClick        = false,  -- false = double-click reels in; modifier + double-click recasts
 		disableClickToMoveWithPole = true,   -- Default ON: crash-safe pause of Click-to-Move while pole equipped
-		castSingleRightClick      = false,  -- Optional single right-click (with anti-conflict guards)
-		singleRightClickMissPause = 15,     -- 0..30s pause after failed cast
-		castSpacebar              = false,  -- Optional spacebar while standing still
-		castMouse3                = false,  -- Optional Middle Mouse
-		castMouse4                = false,  -- Optional Mouse 4
-		castMouse5                = false,  -- Optional Mouse 5
-		actionBarKeyReelsIn       = true,   -- Default ON: pressing Fishing on action bar reels in
-		showBobberIcon            = true,   -- Default ON: Soft-Target interact icon over bobber
+		castSingleRightClick       = false,  -- Optional single right-click (with anti-conflict guards)
+		singleRightClickMissPause  = 15,     -- 0..30s pause after failed cast
+		castSpacebar               = false,  -- Optional spacebar while standing still
+		castMouse3                 = false,  -- Optional Middle Mouse
+		castMouse4                 = false,  -- Optional Mouse 4
+		castMouse5                 = false,  -- Optional Mouse 5
+		actionBarKeyReelsIn        = true,   -- Default ON: pressing Fishing on action bar reels in
+		castAppliesMissingLure     = false,  -- Default OFF: 1-button fishing applies best lure first when missing
+		showBobberIcon             = true,   -- Default ON: Soft-Target interact icon over bobber
 
-		-- Gear & Combat
-		autoEquipWeaponsInCombat  = true,   -- Default ON: auto-swap back to saved weapons on combat
+		-- Gear, Tracking & Combat
+		autoEquipWeaponsInCombat   = true,   -- Default ON: auto-swap back to saved weapons on combat
+		swapFishingOutfit          = false,  -- Default OFF: also swap saved fishing Hat/Boots/Gloves
+		autoFindFish               = true,   -- Default ON: auto-enable Find Fish tracking when pole equipped
 
 		-- Quality of Life
-		autoLootFishing           = true,   -- Default ON: event-based fishing auto-loot (never edits CVar)
-		hideFishingCastBar        = false,  -- Default OFF: hide player cast bar while fishing
-		hideNonHostileNameplates  = true,   -- Default ON: crash-safe nameplate/name hide while fishing
-		hideFriendlyPlayerNames   = false,  -- Default OFF: also hide friendly player & pet overhead names
+		autoLootFishing            = true,   -- Default ON: event-based fishing auto-loot (never edits CVar)
+		hideFishingCastBar         = false,  -- Default OFF: hide player cast bar while fishing
+		hideNonHostileNameplates   = true,   -- Default ON: crash-safe nameplate/name hide while fishing
+		hideFriendlyPlayerNames    = false,  -- Default OFF: also hide friendly player & pet overhead names
+		lureExpiringAlert          = true,   -- Default ON: subtle chime & pulse when lure <= 30s
 
 		-- Sound Boost While Fishing
-		soundBoostEnabled         = false,  -- Default OFF
-		soundMasterVolume         = 0.80,   -- Raise-only target (0..1)
-		soundSfxVolume            = 1.00,   -- Raise-only target (0..1)
-		soundMuteMusicAmbience    = false,  -- Optional mute music, ambience, pet sounds
-		soundEnableBackground     = true,   -- Keep sound playing while alt-tabbed
+		soundBoostEnabled          = false,  -- Default OFF
+		soundMasterVolume          = 0.80,   -- Raise-only target (0..1)
+		soundSfxVolume             = 1.00,   -- Raise-only target (0..1)
+		soundMuteMusicAmbience     = false,  -- Optional mute music, ambience, pet sounds
+		soundEnableBackground      = true,   -- Keep sound playing while alt-tabbed
 
 		-- Minimal Fishing Pill & Buttons
-		showFishingPill           = true,   -- Default ON (pole-only)
-		lockFishingPill           = false,
-		pillPos                   = nil,    -- { point, relPoint, x, y }
-		showCompartmentButton     = true,   -- Default ON
-		showMinimapButton         = false,  -- Default OFF
-		lockMinimapButton         = false,
-		minimapAngle              = ns.DEFAULT_MINIMAP_ANGLE,
+		showFishingPill            = true,   -- Default ON (pole-only)
+		lockFishingPill            = false,
+		pillScale                  = 1.0,    -- 0.75..1.50
+		pillAlpha                  = 0.65,   -- 0.00..1.00 background opacity
+		pillPos                    = nil,    -- { point, relPoint, x, y }
+		showCompartmentButton      = true,   -- Default ON
+		showMinimapButton          = false,  -- Default OFF
+		lockMinimapButton          = false,
+		minimapAngle               = ns.DEFAULT_MINIMAP_ANGLE,
 	}
 end

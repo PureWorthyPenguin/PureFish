@@ -342,6 +342,95 @@ function ns.OnFishingCVarsStop()
 	end)
 end
 
+--------------------------------------------------------------------------------
+-- Crash-Safe "Find Fish" Minimap Tracking Toggle
+--------------------------------------------------------------------------------
+local function FindTrackingIndexBySpellID(targetSpellID)
+	if not (C_Minimap and C_Minimap.GetNumTrackingTypes and C_Minimap.GetTrackingInfo) then
+		return nil, nil
+	end
+	local count = C_Minimap.GetNumTrackingTypes() or 0
+	for i = 1, count do
+		local info = C_Minimap.GetTrackingInfo(i)
+		if type(info) == "table" and info.spellID == targetSpellID then
+			return i, info
+		end
+	end
+	return nil, nil
+end
+
+local function RestoreHeldTracking()
+	local db = ns.GetDB and ns.GetDB()
+	if not db or type(db.heldTracking) ~= "table" then
+		return
+	end
+	if not (C_Minimap and C_Minimap.GetNumTrackingTypes and C_Minimap.GetTrackingInfo and C_Minimap.SetTracking) then
+		db.heldTracking = nil
+		return
+	end
+	local held = db.heldTracking
+	-- Turn Find Fish off if we turned it on
+	if held.turnedOnFindFish then
+		local idx, info = FindTrackingIndexBySpellID(ns.FIND_FISH_SPELL_ID or 43308)
+		if idx and info and info.active then
+			pcall(C_Minimap.SetTracking, idx, false)
+		end
+	end
+	-- Restore any previously active tracking spells
+	if type(held.previousActive) == "table" then
+		for spellID in pairs(held.previousActive) do
+			local idx, info = FindTrackingIndexBySpellID(spellID)
+			if idx and info and not info.active then
+				pcall(C_Minimap.SetTracking, idx, true)
+			end
+		end
+	end
+	db.heldTracking = nil
+end
+
+function ns.HasFindFishTracking()
+	local idx = FindTrackingIndexBySpellID(ns.FIND_FISH_SPELL_ID or 43308)
+	return idx ~= nil
+end
+
+function ns.UpdateFindFishTracking(poleEquipped)
+	local db = ns.GetDB and ns.GetDB()
+	if not db then
+		return
+	end
+	if poleEquipped and db.autoFindFish then
+		if not (C_Minimap and C_Minimap.GetNumTrackingTypes and C_Minimap.GetTrackingInfo and C_Minimap.SetTracking) then
+			return
+		end
+		local findFishID = ns.FIND_FISH_SPELL_ID or 43308
+		local idx, info = FindTrackingIndexBySpellID(findFishID)
+		if not idx or not info then
+			return -- Character doesn't know Find Fish
+		end
+		if info.active then
+			return -- Already active (leave user's state alone)
+		end
+		-- Snapshot currently active tracking spells before enabling Find Fish
+		if type(db.heldTracking) ~= "table" then
+			local prev = {}
+			local count = C_Minimap.GetNumTrackingTypes() or 0
+			for i = 1, count do
+				local tInfo = C_Minimap.GetTrackingInfo(i)
+				if type(tInfo) == "table" and tInfo.active and tInfo.spellID then
+					prev[tInfo.spellID] = true
+				end
+			end
+			db.heldTracking = {
+				turnedOnFindFish = true,
+				previousActive = prev,
+			}
+		end
+		pcall(C_Minimap.SetTracking, idx, true)
+	else
+		RestoreHeldTracking()
+	end
+end
+
 function ns.OnCVarSettingsChanged()
 	local db = ns.GetDB and ns.GetDB()
 	if not db then
@@ -369,6 +458,7 @@ function ns.OnCVarSettingsChanged()
 	end
 
 	ns.UpdateClickToMoveGuard()
+	ns.UpdateFindFishTracking(ns.IsPoleEquipped and ns.IsPoleEquipped() or false)
 end
 
 -- Automatic crash / /reload recovery on login, clean restore on logout, and combat safety for Click-to-Move
@@ -383,8 +473,13 @@ guardFrame:SetScript("OnEvent", function(_, event, arg1)
 	if event == "PLAYER_LOGIN" then
 		ns.RestoreAllCVars()
 		ns.UpdateClickToMoveGuard()
+		-- Recover Find Fish tracking if a crash/reload happened while pole was unequipped
+		if not (ns.IsPoleEquipped and ns.IsPoleEquipped()) then
+			RestoreHeldTracking()
+		end
 	elseif event == "PLAYER_LOGOUT" then
 		ns.RestoreAllCVars()
+		RestoreHeldTracking()
 	elseif event == "PLAYER_REGEN_DISABLED" then
 		RestoreGroup("clickToMove")
 		RestoreGroup("nameplates")

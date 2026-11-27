@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.1.0
+
+- **True 1-Button Fishing (Optional):** New setting **Cast Key Applies Missing Lure First** automatically applies your best available lure (or equipped on-use Fishing Hat) on the first press of any cast key, then casts Fishing on the next press.
+- **Lure-Expiring Chime & Pulse:** Optional subtle sound cue and lure icon pulse when your active lure drops to `<= 30s` or expires.
+- **Auto-Toggle "Find Fish" Tracking:** Automatically enables *Find Fish* minimap tracking when you equip your fishing pole (if learned) and crash-safely restores your previous tracking (*Find Herbs*, *Find Minerals*, etc.) when you swap back to weapons.
+- **Expanded Lure & On-Use Fishing Hat Support:** Added *Sharpened Fish Hook* (+100), *Glow Worm* (+100), and equipped *Weather-Beaten Fishing Hat* (+75 on-use) support to the lure scanner.
+- **Optional Fishing Armor Swap:** Save your fishing Head, Boots, and Gloves in 1 click to swap alongside your pole (with automatic post-combat armor restore if combat interrupts fishing).
+- **Minimal Fishing Pill Customization:** Added **Pill Scale** (`75%–150%`) and **Pill Background Opacity** (`0%–100%`) sliders with quick **Reset** buttons in Settings.
+- **Richer Live Session Tooltip:** Hovering the Fishing Pill now displays live-updating session duration, catches/hour, skill-ups gained, escaped fish count, Vendor Value, and optional **Auctionator Value** alongside the item breakdown.
+- **Settings Search Bar:** Added a live search filter at the top of `Options > AddOns > PureFish`.
+- **Getaway / Low-Skill Lure Nudge:** Pulses the Pill's lure icon and prints a subtle throttled hint if a fish escapes or skill is too low while fishing without an active lure.
+
 ## v1.0.2
 
 - Updated default Minimap button angle to `192°` so PureFade (`164°`), PureFish (`192°`), and PureGrid (`220°`) sit cleanly in alphabetical order with zero overlap.

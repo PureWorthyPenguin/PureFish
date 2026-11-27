@@ -2,11 +2,12 @@
 local _, ns = ...
 
 local poleEquipped = false
-local bestLure = nil -- { id, bonus, name, count, icon }
+local bestLure = nil -- { id, bonus, name, count, icon, macroText, isHat }
 local lureButton = nil
 local pillLureButton = nil
 local pendingLureSync = false
 local pendingMacroSync = false
+local pendingArmorRestore = false
 local combatRetryToken = 0
 local SyncPoleMacro
 
@@ -150,6 +151,105 @@ local function RefreshEquipmentState()
 	end
 end
 
+local function RestoreCombatArmor()
+	local db = ns.GetDB and ns.GetDB()
+	if not db or not db.swapFishingOutfit then
+		pendingArmorRestore = false
+		return
+	end
+	if InCombatLockdown() then
+		pendingArmorRestore = true
+		return
+	end
+	pendingArmorRestore = false
+	local charData = GetCharData()
+	if not charData or type(charData.combatArmor) ~= "table" then
+		return
+	end
+	for _, slotID in ipairs(ns.FISHING_ARMOR_SLOTS or { 1, 8, 10 }) do
+		local itemID = charData.combatArmor[slotID]
+		if type(itemID) == "number" and GetInventoryItemID("player", slotID) ~= itemID then
+			EquipItemToSlot(itemID, slotID)
+		end
+	end
+end
+
+local function EquipFishingArmor()
+	local db = ns.GetDB and ns.GetDB()
+	if not db or not db.swapFishingOutfit or InCombatLockdown() then
+		return
+	end
+	local charData = GetCharData()
+	if not charData or type(charData.fishingArmor) ~= "table" or not next(charData.fishingArmor) then
+		return
+	end
+	if type(charData.combatArmor) ~= "table" then
+		charData.combatArmor = {}
+	end
+	for _, slotID in ipairs(ns.FISHING_ARMOR_SLOTS or { 1, 8, 10 }) do
+		local fishItemID = charData.fishingArmor[slotID]
+		if type(fishItemID) == "number" then
+			local curID = GetInventoryItemID("player", slotID)
+			if curID and curID ~= fishItemID then
+				charData.combatArmor[slotID] = curID
+			end
+			if curID ~= fishItemID then
+				EquipItemToSlot(fishItemID, slotID)
+			end
+		end
+	end
+end
+
+function ns.SaveFishingOutfit()
+	local charData = GetCharData()
+	if not charData then
+		return false
+	end
+	local saved = {}
+	local names = {}
+	local getName = (C_Item and C_Item.GetItemNameByID) or GetItemInfo
+	for _, slotID in ipairs(ns.FISHING_ARMOR_SLOTS or { 1, 8, 10 }) do
+		local itemID = GetInventoryItemID("player", slotID)
+		if itemID then
+			saved[slotID] = itemID
+			names[#names + 1] = (getName and getName(itemID)) or ("Item #" .. tostring(itemID))
+		end
+	end
+	charData.fishingArmor = saved
+	if #names > 0 then
+		print("|cff66ccffPureFish:|r Saved Fishing Armor: |cffffd100" .. table.concat(names, ", ") .. "|r")
+	else
+		print("|cff66ccffPureFish:|r No Head, Boots, or Gloves equipped to save.")
+	end
+	return #names > 0
+end
+
+function ns.ClearFishingOutfit()
+	local charData = GetCharData()
+	if charData then
+		charData.fishingArmor = nil
+		charData.combatArmor = nil
+	end
+	pendingArmorRestore = false
+	print("|cff66ccffPureFish:|r Saved Fishing Armor cleared.")
+end
+
+function ns.GetFishingOutfitSummary()
+	local charData = GetCharData()
+	if not charData or type(charData.fishingArmor) ~= "table" or not next(charData.fishingArmor) then
+		return "None saved (equip fishing hat/boots/gloves & click Save)"
+	end
+	local getName = (C_Item and C_Item.GetItemNameByID) or GetItemInfo
+	local names = {}
+	for _, slotID in ipairs(ns.FISHING_ARMOR_SLOTS or { 1, 8, 10 }) do
+		local id = charData.fishingArmor[slotID]
+		if type(id) == "number" then
+			names[#names + 1] = (getName and getName(id)) or ("Item #" .. tostring(id))
+		end
+	end
+	return #names > 0 and table.concat(names, ", ") or "None saved"
+end
+
 function ns.EquipSavedWeapons(silent)
 	local charData = GetCharData()
 	if not charData or not charData.mainHandID then
@@ -166,6 +266,7 @@ function ns.EquipSavedWeapons(silent)
 	if ohID then
 		EquipItemToSlot(ohID, INVSLOT_OFFHAND or 17)
 	end
+	RestoreCombatArmor()
 
 	-- Retry briefly if GCD or combat swap delayed the off-hand or main-hand
 	combatRetryToken = combatRetryToken + 1
@@ -198,6 +299,7 @@ end
 
 function ns.EquipFishingPole(silent)
 	if poleEquipped then
+		EquipFishingArmor()
 		return true
 	end
 	local poleID = FindAnyPoleInBags()
@@ -208,6 +310,7 @@ function ns.EquipFishingPole(silent)
 		return false
 	end
 	EquipItemToSlot(poleID, INVSLOT_MAINHAND or 16)
+	EquipFishingArmor()
 	return true
 end
 
@@ -290,7 +393,7 @@ function ns.CreatePoleMacro()
 	end
 	if idx and idx > 0 then
 		PickupMacro(idx)
-		print("|cff66ccffPureFish:|r Smart macro |cffffff00" .. MACRO_NAME .. "|r placed on your cursor — Left-Click equips pole / casts Fishing, Right-Click swaps back to weapons!")
+		print("|cff66ccffPureFish:|r Smart macro |cffffff00" .. MACRO_NAME .. "|r placed on your cursor - Left-Click equips pole / casts Fishing, Right-Click swaps back to weapons!")
 		return true
 	end
 	print("|cff66ccffPureFish:|r Could not create macro (your macro list may be full).")
@@ -305,9 +408,9 @@ local function ApplyLureMacroToButton(btn)
 		pendingLureSync = true
 		return
 	end
-	if bestLure then
+	if bestLure and bestLure.macroText then
 		btn:SetAttribute("type", "macro")
-		btn:SetAttribute("macrotext", "/use item:" .. bestLure.id .. "\n/use 16")
+		btn:SetAttribute("macrotext", bestLure.macroText)
 	else
 		btn:SetAttribute("type", nil)
 		btn:SetAttribute("macrotext", nil)
@@ -319,21 +422,59 @@ function ns.RegisterPillLureButton(btn)
 	ApplyLureMacroToButton(btn)
 end
 
+function ns.GetBestLureMacroText()
+	return bestLure and bestLure.macroText or nil
+end
+
+local function IsInventorySlotReady(slotID)
+	if not GetInventoryItemCooldown then
+		return true
+	end
+	local ok, start, duration = pcall(GetInventoryItemCooldown, "player", slotID)
+	if not ok then
+		return true
+	end
+	start = ns.SafeNumber(start) or 0
+	duration = ns.SafeNumber(duration) or 0
+	return start == 0 or duration <= 1.5
+end
+
 local function ScanBestLure()
 	local found = nil
 	local getCount = (C_Item and C_Item.GetItemCount) or GetItemCount
 	local getIcon = (C_Item and C_Item.GetItemIconByID) or GetItemIcon
+
+	-- Check equipped on-use Fishing Hat (e.g. Weather-Beaten Fishing Hat, +75)
+	local headID = GetInventoryItemID("player", 1)
+	local hatInfo = headID and ns.ON_USE_FISHING_HATS and ns.ON_USE_FISHING_HATS[headID]
+	if hatInfo and IsInventorySlotReady(1) then
+		found = {
+			id = headID,
+			bonus = hatInfo.bonus,
+			name = hatInfo.name,
+			count = 1,
+			icon = (getIcon and getIcon(headID)) or "Interface\\Icons\\INV_Helmet_31",
+			macroText = "/use 1",
+			isHat = true,
+		}
+	end
+
+	-- Check bag lures (pick strictly higher bonus over equipped hat, or any if no hat)
 	if getCount then
 		for _, lure in ipairs(ns.LURE_LIST) do
 			local count = getCount(lure.id) or 0
 			if count > 0 then
-				found = {
-					id = lure.id,
-					bonus = lure.bonus,
-					name = lure.name,
-					count = count,
-					icon = (getIcon and getIcon(lure.id)) or "Interface\\Icons\\INV_Misc_Orb_03",
-				}
+				if not found or lure.bonus > found.bonus then
+					found = {
+						id = lure.id,
+						bonus = lure.bonus,
+						name = lure.name,
+						count = count,
+						icon = (getIcon and getIcon(lure.id)) or "Interface\\Icons\\INV_Misc_Orb_03",
+						macroText = "/use item:" .. lure.id .. "\n/use 16",
+						isHat = false,
+					}
+				end
 				break
 			end
 		end
@@ -345,6 +486,9 @@ local function ScanBestLure()
 		pendingLureSync = false
 		ApplyLureMacroToButton(lureButton)
 		ApplyLureMacroToButton(pillLureButton)
+	end
+	if ns.UpdateCastButtonAction then
+		ns.UpdateCastButtonAction()
 	end
 	if ns.UpdatePill then
 		ns.UpdatePill()
@@ -419,6 +563,7 @@ gearFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 gearFrame:SetScript("OnEvent", function(_, event)
 	if event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_EQUIPMENT_CHANGED" then
 		RefreshEquipmentState()
+		ScanBestLure()
 	elseif event == "BAG_UPDATE_DELAYED" then
 		ScanBestLure()
 	elseif event == "PLAYER_REGEN_DISABLED" then
@@ -427,6 +572,9 @@ gearFrame:SetScript("OnEvent", function(_, event)
 			ns.EquipSavedWeapons(true)
 		end
 	elseif event == "PLAYER_REGEN_ENABLED" then
+		if pendingArmorRestore then
+			RestoreCombatArmor()
+		end
 		RefreshEquipmentState()
 		if pendingMacroSync then
 			SyncPoleMacro()

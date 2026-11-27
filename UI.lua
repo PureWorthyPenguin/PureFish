@@ -12,6 +12,7 @@ end
 ns.RefreshUI = RefreshUI
 
 local function AttachTooltip(widget, title, text)
+	widget._searchText = ((title or "") .. " " .. (text or "")):lower()
 	widget:SetScript("OnEnter", function(self)
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 		GameTooltip:SetText(title, 1, 0.82, 0)
@@ -53,6 +54,7 @@ StaticPopupDialogs["PUREFISH_CONFIRM_RESET"] = {
 			RefreshUI()
 			if ns.OnEngineSettingsChanged then ns.OnEngineSettingsChanged() end
 			if ns.UpdatePill then ns.UpdatePill() end
+			if ns.ApplyPillStyle then ns.ApplyPillStyle() end
 			if ns.UpdateMinimapButton then ns.UpdateMinimapButton() end
 			if ns.UpdateCompartmentButton then ns.UpdateCompartmentButton() end
 		end
@@ -131,6 +133,7 @@ local function MakeSlider(parent, label, minVal, maxVal, step, formatFn, tip, ge
 	if tip then
 		AttachTooltip(slider, label, tip)
 	end
+	row._searchText = ((label or "") .. " " .. (tip or "")):lower()
 
 	row.Refresh = function()
 		updating = true
@@ -180,9 +183,18 @@ local function BuildGeneralPage()
 	resetBtn:SetPoint("TOPRIGHT", canvas, "TOPRIGHT", -24, -14)
 	AttachTooltip(resetBtn, "Reset to Defaults", "Resets all PureFish settings back to their default values.")
 
+	-- Live Search Bar (matches PureFade header placement, left of Reset to Defaults)
+	local searchBox = CreateFrame("EditBox", nil, canvas, "SearchBoxTemplate")
+	searchBox:SetSize(175, 22)
+	searchBox:SetPoint("RIGHT", resetBtn, "LEFT", -10, 0)
+	searchBox:SetAutoFocus(false)
+	if searchBox.Instructions then
+		searchBox.Instructions:SetText("Search settings...")
+	end
+
 	local sub = canvas:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	sub:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
-	sub:SetPoint("RIGHT", resetBtn, "LEFT", -12, 0)
+	sub:SetPoint("RIGHT", searchBox, "LEFT", -12, 0)
 	sub:SetJustifyH("LEFT")
 	sub:SetText("Lightweight, zero-dependency fishing QoL addon for WoW Forever. Configure cast/reel keys, weapon auto-swap, crash-safe sound boost, and the minimal fishing pill.")
 	sub:SetTextColor(0.75, 0.75, 0.75)
@@ -203,21 +215,100 @@ local function BuildGeneralPage()
 
 	local y = -6
 	local widgets = {}
+	local layoutItems = {} -- { kind, frame, height, indent, searchText, section }
+	local currentSection = 0
 
-	local function Add(widget, height, indent)
-		widget:SetPoint("TOPLEFT", content, "TOPLEFT", 4 + (indent or 0), y)
-		y = y - (height or 26)
+	local function Add(widget, height, indent, extraSearch)
+		local h = height or 26
+		local ind = indent or 0
+		widget:SetPoint("TOPLEFT", content, "TOPLEFT", 4 + ind, y)
+		y = y - h
 		widgets[#widgets + 1] = widget
+		local searchStr = (widget._searchText or "")
+		if extraSearch then
+			searchStr = searchStr .. " " .. extraSearch:lower()
+		end
+		layoutItems[#layoutItems + 1] = {
+			kind = "widget",
+			frame = widget,
+			height = h,
+			indent = ind,
+			searchText = searchStr,
+			section = currentSection,
+		}
 		return widget
 	end
 
 	local function AddHeader(text)
+		currentSection = currentSection + 1
 		y = y - 6
 		local fs = MakeSectionHeader(content, text)
 		fs:SetPoint("TOPLEFT", content, "TOPLEFT", 4, y)
 		y = y - 22
+		layoutItems[#layoutItems + 1] = {
+			kind = "header",
+			frame = fs,
+			height = 22,
+			indent = 0,
+			searchText = (text or ""):lower(),
+			section = currentSection,
+		}
 		return fs
 	end
+
+	local function ReflowLayout(query, resetScroll)
+		local q = strtrim((query or ""):lower())
+		local filtering = q ~= ""
+		local sectionHasMatch = {}
+
+		if filtering then
+			for _, item in ipairs(layoutItems) do
+				if item.kind == "widget" then
+					if item.searchText:find(q, 1, true) then
+						item._matched = true
+						sectionHasMatch[item.section] = true
+					else
+						item._matched = false
+					end
+				end
+			end
+		end
+
+		local curY = -6
+		for _, item in ipairs(layoutItems) do
+			local hiddenByCondition = item.frame and item.frame._isHiddenFn and item.frame._isHiddenFn()
+			local show
+			if hiddenByCondition then
+				show = false
+			elseif not filtering then
+				show = true
+			elseif item.kind == "header" then
+				show = sectionHasMatch[item.section] == true
+			else
+				show = item._matched == true
+			end
+
+			if show then
+				if item.kind == "header" then
+					curY = curY - 6
+				end
+				item.frame:ClearAllPoints()
+				item.frame:SetPoint("TOPLEFT", content, "TOPLEFT", 4 + item.indent, curY)
+				item.frame:Show()
+				curY = curY - item.height
+			else
+				item.frame:Hide()
+			end
+		end
+		content:SetHeight(math.max(100, math.abs(curY) + 24))
+		if resetScroll then
+			scroll:SetVerticalScroll(0)
+		end
+	end
+
+	searchBox:HookScript("OnTextChanged", function(self)
+		ReflowLayout(self:GetText(), true)
+	end)
 
 	-- Quick Actions Row
 	local actionRow = CreateFrame("Frame", nil, content)
@@ -235,7 +326,7 @@ local function BuildGeneralPage()
 	macroBtn:SetPoint("LEFT", togglePoleBtn, "RIGHT", 8, 0)
 	AttachTooltip(macroBtn, "Create Smart Fishing Macro", "Creates (or updates) the PureFishPole action-bar macro:\n- Left-Click: Equips your fishing pole, or casts Fishing when equipped (and reels in while channeling).\n- Right-Click: Swaps back to your saved combat weapons.")
 
-	Add(actionRow, 32)
+	Add(actionRow, 32, 0, "toggle pole create smart fishing macro")
 
 	------------------------------------------------------------------------
 	-- Section 1: Cast & Reel With (Pole Equipped Only)
@@ -380,7 +471,7 @@ end
 			interactBindBtn:SetText("Set Interact Key")
 		end
 	end
-	Add(interactRow, 26)
+	Add(interactRow, 26, 0, "interact key target f bind controls")
 
 	Add(MakeCheckbox(content, "Double Right-Click (Camera-Safe)",
 		"Double right-click anywhere in the world to cast Fishing, and double right-click again to reel in. Single right-click and camera turning remain completely untouched.",
@@ -444,6 +535,11 @@ end
 		function() return ns.GetDB().castMouse5 end,
 		function(v) ns.GetDB().castMouse5 = v end))
 
+	Add(MakeCheckbox(content, "Cast Key Applies Missing Lure First (1-Button Fishing)",
+		"When your fishing pole has no active lure and you have one in your bags (or an on-use Fishing Hat equipped), pressing your cast key applies the best lure first, then casts Fishing on the next press.",
+		function() return ns.GetDB().castAppliesMissingLure end,
+		function(v) ns.GetDB().castAppliesMissingLure = v end))
+
 	Add(MakeCheckbox(content, "Show Interact Icon Above Bobber",
 		"Displays WoW's native Soft-Target interact icon over your fishing bobber while casting, confirming that pressing your reel key will catch it. Restored safely when fishing ends.",
 		function() return ns.GetDB().showBobberIcon end,
@@ -454,23 +550,65 @@ end
 	bindNote:SetTextColor(0.65, 0.80, 1.0)
 	bindNote:SetWidth(550)
 	bindNote:SetJustifyH("LEFT")
-	Add(bindNote, 30, 4)
+	Add(bindNote, 30, 4, "keybind key bindings cast reel pole lure")
 
 	------------------------------------------------------------------------
-	-- Section 2: Gear & Combat
+	-- Section 2: Gear, Tracking & Combat
 	------------------------------------------------------------------------
-	AddHeader("Gear & Combat")
+	AddHeader("Gear, Tracking & Combat")
 
 	Add(MakeCheckbox(content, "Auto-Equip Saved Weapons on Entering Combat",
 		"Automatically swaps back to your saved combat Main Hand (and Off Hand) the moment you enter combat while holding a fishing pole.",
 		function() return ns.GetDB().autoEquipWeaponsInCombat end,
 		function(v) ns.GetDB().autoEquipWeaponsInCombat = v end))
 
+	local findFishCB = Add(MakeCheckbox(content, "Auto-Toggle Find Fish Minimap Tracking",
+		"Automatically enables Find Fish tracking when you equip your fishing pole (if learned) and restores your previous tracking (e.g. Find Herbs / Find Minerals) when you swap back to weapons.",
+		function() return ns.GetDB().autoFindFish end,
+		function(v) ns.GetDB().autoFindFish = v end))
+	findFishCB._isHiddenFn = function()
+		return not (ns.HasFindFishTracking and ns.HasFindFishTracking())
+	end
+
+	Add(MakeCheckbox(content, "Swap Saved Fishing Armor (Hat / Boots / Gloves)",
+		"Also equips your saved Fishing Hat, Boots, and Gloves when swapping to your fishing pole, and restores your combat armor when swapping back (after combat ends if triggered in combat).",
+		function() return ns.GetDB().swapFishingOutfit end,
+		function(v) ns.GetDB().swapFishingOutfit = v end))
+
+	local outfitBtnRow = CreateFrame("Frame", nil, content)
+	outfitBtnRow:SetSize(300, 24)
+
+	local saveOutfitBtn = MakeButton(outfitBtnRow, "Save Current Fishing Armor", 190, 22, function()
+		if ns.SaveFishingOutfit then
+			ns.SaveFishingOutfit()
+			RefreshUI()
+		end
+	end)
+	saveOutfitBtn:SetPoint("LEFT", outfitBtnRow, "LEFT", 0, 0)
+	AttachTooltip(saveOutfitBtn, "Save Current Fishing Armor", "Snapshots your currently equipped Head, Boots, and Gloves as your Fishing Armor set for this character.")
+
+	local clearOutfitBtn = MakeButton(outfitBtnRow, "Reset", 60, 22, function()
+		if ns.ClearFishingOutfit then
+			ns.ClearFishingOutfit()
+			RefreshUI()
+		end
+	end)
+	clearOutfitBtn:SetPoint("LEFT", saveOutfitBtn, "RIGHT", 8, 0)
+	AttachTooltip(clearOutfitBtn, "Reset Fishing Armor", "Clears the saved Fishing Armor set for this character.")
+
+	Add(outfitBtnRow, 28, 22, "save current fishing armor reset clear hat boots gloves")
+
 	local savedGearFS = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	savedGearFS:SetTextColor(0.8, 0.8, 0.8)
 	savedGearFS:SetWidth(550)
 	savedGearFS:SetJustifyH("LEFT")
-	Add(savedGearFS, 22, 4)
+	Add(savedGearFS, 20, 4, "saved combat weapons")
+
+	local savedArmorFS = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	savedArmorFS:SetTextColor(0.8, 0.8, 0.8)
+	savedArmorFS:SetWidth(550)
+	savedArmorFS:SetJustifyH("LEFT")
+	Add(savedArmorFS, 22, 4, "saved fishing armor hat boots gloves")
 
 	------------------------------------------------------------------------
 	-- Section 3: Sound Boost While Fishing
@@ -529,6 +667,11 @@ end
 		function() return ns.GetDB().hideFriendlyPlayerNames end,
 		function(v) ns.GetDB().hideFriendlyPlayerNames = v end), 26, 22)
 
+	Add(MakeCheckbox(content, "Chime & Pulse When Lure Is Expiring (<= 30s)",
+		"Plays a subtle audio chime and pulses the Fishing Pill's lure icon when your active lure drops to 30 seconds or expires.",
+		function() return ns.GetDB().lureExpiringAlert end,
+		function(v) ns.GetDB().lureExpiringAlert = v end))
+
 	------------------------------------------------------------------------
 	-- Section 5: Minimal Fishing Pill
 	------------------------------------------------------------------------
@@ -540,12 +683,49 @@ end
 		function(v)
 			ns.GetDB().showFishingPill = v
 			if ns.UpdatePill then ns.UpdatePill() end
+			if ns.ApplyPillStyle then ns.ApplyPillStyle() end
 		end))
 
 	Add(MakeCheckbox(content, "Lock Fishing Pill Position",
 		"Prevents accidentally dragging the Minimal Fishing Pill.",
 		function() return ns.GetDB().lockFishingPill end,
 		function(v) ns.GetDB().lockFishingPill = v end))
+
+	local pillScaleSlider = Add(MakeSlider(content, "Pill Scale", 0.75, 1.50, 0.05,
+		function(v) return string.format("%d%%", math.floor(v * 100 + 0.5)) end,
+		"Scales the Minimal Fishing Pill up or down (75% - 150%).",
+		function() return ns.GetDB().pillScale end,
+		function(v)
+			ns.GetDB().pillScale = v
+			if ns.ApplyPillStyle then ns.ApplyPillStyle() end
+		end), 28)
+
+	local resetScaleBtn = MakeButton(pillScaleSlider, "Reset", 54, 20, function()
+		ns.GetDB().pillScale = 1.0
+		if ns.ApplyPillStyle then ns.ApplyPillStyle() end
+		RefreshUI()
+	end)
+	resetScaleBtn:SetPoint("RIGHT", pillScaleSlider, "RIGHT", -16, 0)
+	AttachTooltip(resetScaleBtn, "Reset Pill Scale", "Resets Pill Scale back to 100%.")
+	pillScaleSlider.resetBtn = resetScaleBtn
+
+	local pillAlphaSlider = Add(MakeSlider(content, "Pill Background Opacity", 0.00, 1.00, 0.05,
+		function(v) return string.format("%d%%", math.floor(v * 100 + 0.5)) end,
+		"Adjusts the darkness/transparency of the Minimal Fishing Pill's background.",
+		function() return ns.GetDB().pillAlpha end,
+		function(v)
+			ns.GetDB().pillAlpha = v
+			if ns.ApplyPillStyle then ns.ApplyPillStyle() end
+		end), 28)
+
+	local resetAlphaBtn = MakeButton(pillAlphaSlider, "Reset", 54, 20, function()
+		ns.GetDB().pillAlpha = 0.65
+		if ns.ApplyPillStyle then ns.ApplyPillStyle() end
+		RefreshUI()
+	end)
+	resetAlphaBtn:SetPoint("RIGHT", pillAlphaSlider, "RIGHT", -16, 0)
+	AttachTooltip(resetAlphaBtn, "Reset Pill Opacity", "Resets Pill Background Opacity back to 65%.")
+	pillAlphaSlider.resetBtn = resetAlphaBtn
 
 	local resetPillBtn = MakeButton(content, "Reset Pill Position", 190, 22, function()
 		if ns.ResetPillPosition then ns.ResetPillPosition() end
@@ -620,7 +800,15 @@ end
 		friendlyNamesCB:SetEnabled(npActive)
 		if friendlyNamesCB.label then friendlyNamesCB.label:SetTextColor(npActive and 1 or 0.5, npActive and 1 or 0.5, npActive and 1 or 0.5) end
 
+		local pillOn = db.showFishingPill and true or false
+		pillScaleSlider:SetEnabled(pillOn)
+		pillAlphaSlider:SetEnabled(pillOn)
+		if pillScaleSlider.resetBtn then pillScaleSlider.resetBtn:SetEnabled(pillOn) end
+		if pillAlphaSlider.resetBtn then pillAlphaSlider.resetBtn:SetEnabled(pillOn) end
+
 		savedGearFS:SetText("Saved Combat Weapons: |cffffd100" .. (ns.GetSavedGearSummary and ns.GetSavedGearSummary() or "None") .. "|r")
+		savedArmorFS:SetText("Saved Fishing Armor: |cffffd100" .. (ns.GetFishingOutfitSummary and ns.GetFishingOutfitSummary() or "None") .. "|r")
+		ReflowLayout(searchBox:GetText())
 	end
 
 	refreshCallbacks[#refreshCallbacks + 1] = RefreshPage
