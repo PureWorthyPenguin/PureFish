@@ -421,14 +421,17 @@ local function UpdateFishingCastBar(bar)
 	if not db or not db.hideFishingCastBar then
 		if bar.pureFishHidden then
 			bar.pureFishHidden = nil
-			bar:SetAlpha(1)
+			if bar:IsShown() then
+				bar:SetAlpha(1)
+			end
 		end
 		return
 	end
 	if ns.IsChannelingFishing() then
 		bar.pureFishHidden = true
 		bar:SetAlpha(0)
-	elseif bar.pureFishHidden then
+	elseif bar.pureFishHidden and IsCastingAnySpell() then
+		-- Another (non-Fishing) spell started casting: hand the bar back immediately
 		bar.pureFishHidden = nil
 		bar:SetAlpha(1)
 	end
@@ -441,6 +444,19 @@ local function EnsureCastBarHooked()
 			hookedCastBars[bar] = true
 			bar:HookScript("OnEvent", UpdateFishingCastBar)
 			bar:HookScript("OnShow", UpdateFishingCastBar)
+			bar:HookScript("OnHide", function(self)
+				self.pureFishHidden = nil
+			end)
+			hooksecurefunc(bar, "SetAlpha", function(self, a)
+				if self.pureFishHidden and type(a) == "number" and a > 0 then
+					local db = ns.GetDB and ns.GetDB()
+					if db and db.hideFishingCastBar and not (IsCastingAnySpell() and not ns.IsChannelingFishing()) then
+						self:SetAlpha(0)
+					else
+						self.pureFishHidden = nil
+					end
+				end
+			end)
 			UpdateFishingCastBar(bar)
 		end
 	end
@@ -646,6 +662,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
 			chanStartAt = GetTime()
 			shortEndAt = nil
 			EnsureCastBarHooked()
+			ns.RefreshCastBarVisibility()
 			if ns.OnFishingCVarsStart then
 				ns.OnFishingCVarsStart()
 			end
@@ -661,6 +678,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
 			channelEndedAt = now
 			shortEndAt = (chanStartAt and (now - chanStartAt < 1.5)) and now or nil
 			chanStartAt = nil
+			ns.RefreshCastBarVisibility()
 			if ns.OnFishingCVarsStop then
 				ns.OnFishingCVarsStop()
 			end

@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.1.1
+
+- Fixed a conflict between **Hide Fishing Cast Bar** and UI fading addons like **PureFade** (cast bar now stays cleanly hidden throughout the Fishing cast and fade-out, without flickering or getting stuck when Fishing ends, while normal spell casts appear immediately).
+
 ## v1.1.0
 
 - **True 1-Button Fishing (Optional):** New setting **Cast Key Applies Missing Lure First** automatically applies your best available lure (or equipped on-use Fishing Hat) on the first press of any cast key, then casts Fishing on the next press.
