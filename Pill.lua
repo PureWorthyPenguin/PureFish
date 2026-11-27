@@ -12,15 +12,71 @@ local swapBtn
 local swapIcon
 local updateTicker
 
--- Session catch tracking
+-- Session catch tracking (persists across /reload and short breaks < 5 min)
+local SESSION_EXPIRE_SECONDS = 300
 local sessionTotal = 0
 local sessionItems = {} -- [itemName] = { count = n, icon = texture }
-local sessionStartTime = nil
+local sessionStartWallTime = nil
 local sessionStartSkill = nil
 local sessionGetaways = 0
 local sessionVendorCopper = 0
 local sessionAHCopper = 0
 local lastLootWindowAt = 0
+
+local function GetSessionCharData()
+	local db = ns.GetDB and ns.GetDB()
+	if not db then
+		return nil
+	end
+	if type(db.charData) ~= "table" then
+		db.charData = {}
+	end
+	local key = ns.GetCharKey()
+	if type(db.charData[key]) ~= "table" then
+		db.charData[key] = {}
+	end
+	return db.charData[key]
+end
+
+local function SaveSessionToDB()
+	local charData = GetSessionCharData()
+	if not charData then
+		return
+	end
+	if not sessionStartWallTime then
+		charData.session = nil
+		return
+	end
+	charData.session = {
+		total = sessionTotal,
+		items = sessionItems,
+		startWallTime = sessionStartWallTime,
+		lastActivityAt = time(),
+		startSkill = sessionStartSkill,
+		getaways = sessionGetaways,
+		vendorCopper = sessionVendorCopper,
+		ahCopper = sessionAHCopper,
+	}
+end
+
+local function LoadSessionFromDB()
+	local charData = GetSessionCharData()
+	local s = charData and charData.session
+	if type(s) ~= "table" or not s.startWallTime or not s.lastActivityAt then
+		return
+	end
+	if (time() - s.lastActivityAt) > SESSION_EXPIRE_SECONDS then
+		charData.session = nil
+		return
+	end
+	sessionTotal = tonumber(s.total) or 0
+	sessionItems = type(s.items) == "table" and s.items or {}
+	sessionStartWallTime = tonumber(s.startWallTime)
+	sessionStartSkill = tonumber(s.startSkill)
+	sessionGetaways = tonumber(s.getaways) or 0
+	sessionVendorCopper = tonumber(s.vendorCopper) or 0
+	sessionAHCopper = tonumber(s.ahCopper) or 0
+end
 
 local function FormatCoins(copper)
 	copper = math.floor(copper or 0)
@@ -65,8 +121,8 @@ local lureAlertArmed = false
 local lastNudgeChatAt = -math.huge
 
 local function EnsureSessionStarted()
-	if not sessionStartTime then
-		sessionStartTime = GetTime()
+	if not sessionStartWallTime then
+		sessionStartWallTime = time()
 	end
 	if not sessionStartSkill and ns.GetFishingSkillInfo then
 		local rank = ns.GetFishingSkillInfo()
@@ -122,14 +178,18 @@ function ns.RecordFishingLoot(numLoot)
 		end
 	end
 
-	if addedAny and ns.UpdatePill then
-		ns.UpdatePill()
+	if addedAny then
+		SaveSessionToDB()
+		if ns.UpdatePill then
+			ns.UpdatePill()
+		end
 	end
 end
 
 function ns.RecordFishingGetaway()
 	EnsureSessionStarted()
 	sessionGetaways = sessionGetaways + 1
+	SaveSessionToDB()
 	if ns.UpdatePill then
 		ns.UpdatePill()
 	end
@@ -159,12 +219,13 @@ end
 
 function ns.ResetSessionStats()
 	sessionTotal = 0
-	sessionStartTime = nil
+	sessionStartWallTime = nil
 	sessionStartSkill = nil
 	sessionGetaways = 0
 	sessionVendorCopper = 0
 	sessionAHCopper = 0
 	wipe(sessionItems)
+	SaveSessionToDB()
 	if ns.UpdatePill then
 		ns.UpdatePill()
 	end
@@ -439,8 +500,8 @@ function ns.InitPill()
 	PopulateSessionTooltip = function(owner)
 		GameTooltip:SetOwner(owner, GetPillTooltipAnchor())
 		GameTooltip:SetText("PureFish Session", 1, 0.82, 0)
-		if sessionStartTime then
-			local elapsed = math.max(1, GetTime() - sessionStartTime)
+		if sessionStartWallTime then
+			local elapsed = math.max(1, time() - sessionStartWallTime)
 			local rateStr = ""
 			if sessionTotal > 0 and elapsed >= 30 then
 				local perHour = math.floor((sessionTotal * 3600 / elapsed) + 0.5)
@@ -594,16 +655,22 @@ function ns.InitPill()
 	statusFS:SetWordWrap(false)
 
 	pillFrame = f
+	LoadSessionFromDB()
 	ns.ApplyPillStyle()
 	PositionPill()
 	ns.UpdatePill()
 end
 
--- Hide pill during combat, refresh on skill-up or combat end
+-- Hide pill during combat, refresh on skill-up or combat end, save timestamp on logout
 local pillEvents = CreateFrame("Frame")
 pillEvents:RegisterEvent("PLAYER_REGEN_DISABLED")
 pillEvents:RegisterEvent("PLAYER_REGEN_ENABLED")
 pillEvents:RegisterEvent("SKILL_LINES_CHANGED")
-pillEvents:SetScript("OnEvent", function()
-	ns.UpdatePill()
+pillEvents:RegisterEvent("PLAYER_LOGOUT")
+pillEvents:SetScript("OnEvent", function(_, event)
+	if event == "PLAYER_LOGOUT" then
+		SaveSessionToDB()
+	else
+		ns.UpdatePill()
+	end
 end)

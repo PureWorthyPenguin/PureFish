@@ -2,7 +2,7 @@
 ## Title: PureFish
 ## Notes: Lightweight, zero-dependency fishing QoL addon for WoW Forever. Interact-key & double-click cast/reel, combat weapon auto-swap, crash-safe sound boost, lure helper, and minimal pole-only status pill.
 ## Author: WorthyPenguin
-## Version: 1.1.1
+## Version: 1.1.2
 ## Category: Professions
 ## IconTexture: Interface\Icons\Trade_Fishing
 ## SavedVariables: PureFishDB

@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.1.2
+
+- Fishing session stats (catches, duration, skill gained, escaped count, Vendor Value, and Auctionator Value) now persist per character across `/reload` and short breaks (under 5 minutes), and reset automatically after a longer break or on Right-Clicking the Pill.
+
 ## v1.1.1
 
 - Fixed a conflict between **Hide Fishing Cast Bar** and UI fading addons like **PureFade** (cast bar now stays cleanly hidden throughout the Fishing cast and fade-out, without flickering or getting stuck when Fishing ends, while normal spell casts appear immediately).
