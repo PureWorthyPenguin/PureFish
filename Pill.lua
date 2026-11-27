@@ -357,7 +357,9 @@ local function UpdatePillContents()
 			lureGlow:Show()
 			if lureAlertArmed and db and db.lureExpiringAlert then
 				lureAlertArmed = false
-				pcall(PlaySound, (SOUNDKIT and SOUNDKIT.UI_BNET_TOAST) or 18019, "Master")
+				if ns.PlayLureAlertSound then
+					ns.PlayLureAlertSound()
+				end
 			end
 		end
 		lureCountFS:SetText("")

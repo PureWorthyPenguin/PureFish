@@ -668,9 +668,59 @@ end
 		function(v) ns.GetDB().hideFriendlyPlayerNames = v end), 26, 22)
 
 	Add(MakeCheckbox(content, "Chime & Pulse When Lure Is Expiring (<= 30s)",
-		"Plays a subtle audio chime and pulses the Fishing Pill's lure icon when your active lure drops to 30 seconds or expires.",
+		"Plays your selected Blizzard alert sound and pulses the Fishing Pill's lure icon when your active lure drops to 30 seconds remaining.",
 		function() return ns.GetDB().lureExpiringAlert end,
 		function(v) ns.GetDB().lureExpiringAlert = v end))
+
+	local lureSoundRow = CreateFrame("Frame", nil, content)
+	lureSoundRow:SetSize(560, 28)
+
+	local lureSoundLabel = lureSoundRow:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	lureSoundLabel:SetPoint("LEFT", lureSoundRow, "LEFT", 0, 0)
+	lureSoundLabel:SetWidth(140)
+	lureSoundLabel:SetJustifyH("LEFT")
+	lureSoundLabel:SetText("Alert Sound")
+
+	local lureSoundDD = CreateFrame("DropdownButton", nil, lureSoundRow, "WowStyle1DropdownTemplate")
+	lureSoundDD:SetSize(200, 24)
+	lureSoundDD:SetPoint("LEFT", lureSoundLabel, "RIGHT", 8, 0)
+	lureSoundDD:SetDefaultText("Alarm Bell")
+	lureSoundDD:SetupMenu(function(_, rootDescription)
+		for _, opt in ipairs(ns.LURE_SOUND_OPTIONS) do
+			rootDescription:CreateRadio(opt.label,
+				function() return (ns.GetDB().lureExpiringSound or "alarm_clock") == opt.key end,
+				function()
+					ns.GetDB().lureExpiringSound = opt.key
+					if ns.PlayLureAlertSound then
+						ns.PlayLureAlertSound(opt.key)
+					end
+					RefreshUI()
+				end)
+		end
+	end)
+	AttachTooltip(lureSoundDD, "Lure Expiring Sound", "Choose which native Blizzard sound plays when your lure reaches 30 seconds remaining. Selecting a sound previews it immediately.")
+
+	local testSoundBtn = MakeButton(lureSoundRow, "Test", 56, 22, function()
+		if ns.PlayLureAlertSound then
+			ns.PlayLureAlertSound()
+		end
+	end)
+	testSoundBtn:SetPoint("LEFT", lureSoundDD, "RIGHT", 8, 0)
+	AttachTooltip(testSoundBtn, "Test Sound", "Plays the currently selected Lure-Expiring alert sound.")
+
+	lureSoundRow.Refresh = function()
+		local curKey = ns.GetDB().lureExpiringSound or "alarm_clock"
+		lureSoundDD:SetDefaultText(ns.GetLureSoundLabel and ns.GetLureSoundLabel(curKey) or curKey)
+		if lureSoundDD.GenerateMenu then
+			lureSoundDD:GenerateMenu()
+		end
+	end
+	lureSoundRow.SetEnabled = function(_, enabled)
+		lureSoundDD:SetEnabled(enabled)
+		testSoundBtn:SetEnabled(enabled)
+		lureSoundLabel:SetTextColor(enabled and 1 or 0.5, enabled and 1 or 0.5, enabled and 1 or 0.5)
+	end
+	Add(lureSoundRow, 30, 22, "lure expiring alert sound chime dropdown test")
 
 	------------------------------------------------------------------------
 	-- Section 5: Minimal Fishing Pill
@@ -799,6 +849,8 @@ end
 		local npActive = db.hideNonHostileNameplates and true or false
 		friendlyNamesCB:SetEnabled(npActive)
 		if friendlyNamesCB.label then friendlyNamesCB.label:SetTextColor(npActive and 1 or 0.5, npActive and 1 or 0.5, npActive and 1 or 0.5) end
+
+		lureSoundRow:SetEnabled(db.lureExpiringAlert and true or false)
 
 		local pillOn = db.showFishingPill and true or false
 		pillScaleSlider:SetEnabled(pillOn)

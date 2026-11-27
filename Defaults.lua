@@ -147,6 +147,49 @@ ns.ON_USE_FISHING_HATS = {
 -- Armor slots supported for optional Fishing Outfit swap (Head, Feet, Hands)
 ns.FISHING_ARMOR_SLOTS = { 1, 8, 10 }
 
+-- Curated native Blizzard sounds for the Lure-Expiring alert
+ns.LURE_SOUND_OPTIONS = {
+	{ key = "map_ping",       label = "Map Ping",                 soundKit = "MAP_PING",                fallback = 3175 },
+	{ key = "ready_check",    label = "Ready Check",              soundKit = "READY_CHECK",             fallback = 8960 },
+	{ key = "whisper",        label = "Whisper Chime",            soundKit = "TELL_MESSAGE",            fallback = 3081 },
+	{ key = "auction_bell",   label = "Auction Bell",             soundKit = "AUCTION_WINDOW_OPEN",     fallback = 5274 },
+	{ key = "quest_complete", label = "Quest Complete",           soundKit = "IG_QUEST_LIST_COMPLETE",  fallback = 878 },
+	{ key = "raid_warning",   label = "Raid Warning",             soundKit = "RAID_WARNING",            fallback = 8959 },
+	{ key = "gem_chime",      label = "Gem Chime",                soundKit = "PUT_DOWN_GEMS",           fallback = 1204 },
+	{ key = "bnet_toast",     label = "Friend Login Toast",       soundKit = "UI_BNET_TOAST",           fallback = 18019 },
+	{ key = "group_invite",   label = "Group Invite",             soundKit = "IG_PLAYER_INVITE",        fallback = 880 },
+	{ key = "coin_chime",     label = "Coin Clink",               soundKit = "MONEY_FRAME_OPEN",        fallback = 891 },
+	{ key = "alarm_clock",    label = "Alarm Bell",               soundKit = "ALARM_CLOCK_WARNING_3",   fallback = 12867 },
+	{ key = "pvp_queue",      label = "Queue Ready",              soundKit = "PVP_THROUGH_QUEUE",       fallback = 8459 },
+	{ key = "none",           label = "None (Visual Pulse Only)", soundKit = nil,                       fallback = nil },
+}
+
+function ns.GetLureSoundLabel(key)
+	for _, opt in ipairs(ns.LURE_SOUND_OPTIONS) do
+		if opt.key == key then
+			return opt.label
+		end
+	end
+	return "Alarm Bell"
+end
+
+function ns.PlayLureAlertSound(overrideKey)
+	local db = ns.GetDB and ns.GetDB()
+	local key = overrideKey or (db and db.lureExpiringSound) or "alarm_clock"
+	if key == "none" then
+		return
+	end
+	for _, opt in ipairs(ns.LURE_SOUND_OPTIONS) do
+		if opt.key == key then
+			local id = (SOUNDKIT and opt.soundKit and SOUNDKIT[opt.soundKit]) or opt.fallback
+			if id then
+				pcall(PlaySound, id, "Master")
+			end
+			return
+		end
+	end
+end
+
 -- Priority-ordered fishing lures (highest skill bonus first)
 ns.LURE_LIST = {
 	{ id = 34861, bonus = 100, name = "Sharpened Fish Hook" },
@@ -190,6 +233,7 @@ function ns.BuildDefaultSettings()
 		hideNonHostileNameplates   = true,   -- Default ON: crash-safe nameplate/name hide while fishing
 		hideFriendlyPlayerNames    = false,  -- Default OFF: also hide friendly player & pet overhead names
 		lureExpiringAlert          = true,   -- Default ON: subtle chime & pulse when lure <= 30s
+		lureExpiringSound          = "alarm_clock", -- Selected native Blizzard alert sound
 
 		-- Sound Boost While Fishing
 		soundBoostEnabled          = false,  -- Default OFF

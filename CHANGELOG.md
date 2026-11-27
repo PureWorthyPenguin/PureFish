@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.1.3
+
+- Added a native **Alert Sound** dropdown + **Test** button under **Chime & Pulse When Lure Is Expiring (<= 30s)** with 13 curated Blizzard sounds (default: **Alarm Bell**, plus a **None (Visual Pulse Only)** option).
+
 ## v1.1.2
 
 - Fishing session stats (catches, duration, skill gained, escaped count, Vendor Value, and Auctionator Value) now persist per character across `/reload` and short breaks (under 5 minutes), and reset automatically after a longer break or on Right-Clicking the Pill.
